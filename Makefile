@@ -52,9 +52,13 @@ BUILD    := build
 BOOT_SRC := boot/boot.asm
 BOOT_BIN := $(BUILD)/boot.bin
 
-KERNEL_ASM_SRCS := kernel/arch/x86/start.asm
+KERNEL_ASM_SRCS := kernel/arch/x86/start.asm \
+                   kernel/arch/x86/idt.asm
 KERNEL_C_SRCS   := kernel/kernel.c \
-                   kernel/drivers/vga.c
+                   kernel/drivers/vga.c \
+                   kernel/drivers/keyboard.c \
+                   kernel/arch/x86/idt.c \
+                   kernel/arch/x86/pic.c
 
 KERNEL_OBJS := \
     $(patsubst %.asm, $(BUILD)/%.o, $(KERNEL_ASM_SRCS)) \

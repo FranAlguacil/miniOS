@@ -40,10 +40,17 @@ miniOS/
 │   └── boot.asm          # Bootloader MBR (512 bytes)
 ├── kernel/
 │   ├── arch/x86/
-│   │   └── start.asm     # Entry point 32-bit del kernel
+│   │   ├── start.asm     # Entry point 32-bit del kernel
+│   │   ├── idt.asm       # ISR stubs (interrupts)
+│   │   ├── idt.c         # IDT setup
+│   │   ├── idt.h         # IDT interface
+│   │   ├── pic.c         # PIC 8259A init + EOI
+│   │   └── pic.h         # PIC interface
 │   ├── drivers/
 │   │   ├── vga.h         # Interfaz del driver VGA
-│   │   └── vga.c         # Driver texto 80×25
+│   │   ├── vga.c         # Driver texto 80×25
+│   │   ├── keyboard.h    # Interfaz del driver de teclado
+│   │   └── keyboard.c    # Keyboard IRQ handler
 │   ├── include/
 │   │   └── types.h       # uint8_t, uint32_t… sin libc
 │   └── kernel.c          # kernel_main — punto de entrada en C
@@ -137,12 +144,45 @@ Reemplaza `<stdint.h>` porque compilamos con `-nostdinc` (sin cabeceras del sist
 | # | Estado | Componente |
 |---|---|---|
 | 1 | ✅ | Bootloader MBR + modo protegido + VGA |
-| 2 | ⬜ | IDT + PIC 8259A + driver de teclado |
+| 2 | ✅ | IDT + PIC 8259A + driver de teclado |
 | 3 | ⬜ | Paginación x86 + `kmalloc` |
 | 4 | ⬜ | Scheduler round-robin + PCB + context switch |
 | 5 | ⬜ | Syscalls: `write`, `read`, `fork`, `exec`, `exit` |
 | 6 | ⬜ | VFS + initrd (sistema de archivos en memoria) |
 | 7 | ⬜ | Shell rudimentario |
+
+---
+
+## Phase 2: IDT + PIC + Keyboard
+
+### IDT (Interrupt Descriptor Table)
+
+- `kernel/arch/x86/idt.asm` — stubs para ISR0-ISR1 (excepciones) e IRQ0-IRQ1 (hardware)
+- `kernel/arch/x86/idt.c` — carga GDT, registra handlers
+- Cada ISR guarda todos los registros, llama al handler en C, y restaura con `iret`
+
+### PIC (8259A Programmable Interrupt Controller)
+
+- `kernel/arch/x86/pic.c` — inicializa PIC master + slave en modo cascada
+- Remapea IRQ0-7 → ISR 32-39, IRQ8-15 → ISR 40-47
+- Habilita solo IRQ1 (teclado) en esta fase
+- `pic_eoi()` envía End-of-Interrupt al PIC
+
+### Keyboard Driver
+
+- `kernel/drivers/keyboard.c` — handler IRQ1
+- Lee scancode del puerto 0x60
+- Traduce a ASCII (qwerty, números, Enter, Backspace…)
+- Imprime carácter en VGA
+
+### Flujo de una pulsación
+
+```
+Teclado → IRQ1 → PIC → CPU → IDT[33] → isr_irq1
+  → stack saved → irq_handler(33) → keyboard_handler()
+  → inb(0x60) → scancode_to_ascii → vga_putchar()
+  → pic_eoi(1) → iret → restora registros
+```
 
 ---
 
